@@ -1,93 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { collection, addDoc, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
-import { db } from "@/firebase/firebase";
+import { useState } from "react";
+import { useRouter } from "next/navigation";
 import { useAuthStore } from "@/store/authStore";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
-import { useRouter } from "next/navigation";
-
-type Trip = {
-    id: string;
-    title: string;
-    description?: string;
-};
+import { useTrips } from "@/hooks/useTrips";
 
 const TripsPage = () => {
     const router = useRouter();
     const user = useAuthStore((state) => state.user);
+    const { trips, loading, error, createTrip } = useTrips(user?.uid);
 
-    const [trips, setTrips] = useState<Trip[]>([]);
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState<string | null>(null);
-
-    useEffect(() => {
-        if (!user) return;
-
-        const fetchTrips = async () => {
-            try {
-                const q = query(
-                    collection(db, "trips"),
-                    where("ownerId", "==", user.uid),
-                    orderBy("createdAt", "desc")
-                );
-
-                const snapshot = await getDocs(q);
-                const tripsData: Trip[] = snapshot.docs.map((doc) => ({
-                    id: doc.id,
-                    ...(doc.data() as Omit<Trip, "id">),
-                }));
-                setTrips(tripsData);
-            } catch (err: any) {
-                setError(err.message);
-            }
-        };
-
-        fetchTrips();
-    }, [user]);
+    const [startDate, setStartDate] = useState("");
+    const [endDate, setEndDate] = useState("");
 
     const handleCreateTrip = async () => {
-        if (!title.trim()) return;
-
-        setLoading(true);
-        setError(null);
-        try {
-            const docRef = await addDoc(collection(db, "trips"), {
-                title,
-                description: description || "",
-                ownerId: user!.uid,
-                collaborators: [],
-                createdAt: Timestamp.now(),
-            });
-
-            setTrips([{ id: docRef.id, title, description }, ...trips]);
-            setTitle("");
-            setDescription("");
-        } catch (err: any) {
-            setError(err.message);
-        } finally {
-            setLoading(false);
-        }
+        await createTrip(title, description, startDate, endDate);
+        setTitle("");
+        setDescription("");
+        setStartDate("");
+        setEndDate("");
     };
 
-    if (!user) return <p className="p-4 text-center">Будь ласка, увійдіть в акаунт</p>;
-
     return (
-        <div className="min-h-screen bg-gray-100 flex flex-col items-center p-4">
-            <div className="w-full max-w-3xl">
-                <h1 className="text-3xl font-bold mb-6 text-center">Мої подорожі</h1>
+        <div className="min-h-screen bg-gray-100 p-4">
+            <div className="max-w-3xl mx-auto">
+                <h1 className="text-2xl font-bold mb-4">Мої подорожі</h1>
 
-                {error && <p className="mb-4 text-center text-red-600">{error}</p>}
+                {error && <p className="mb-4 text-red-600">{error}</p>}
 
                 {/* Форма створення подорожі */}
-                <div className="bg-white p-6 rounded-lg shadow mb-8">
-                    <h2 className="text-xl font-semibold mb-4 text-center">Створити нову подорож</h2>
-
-                    <div className="mb-4">
+                <div className="bg-white p-4 rounded-md shadow mb-6">
+                    <div className="mb-2">
                         <Label htmlFor="title">Назва подорожі</Label>
                         <Input
                             id="title"
@@ -98,7 +46,7 @@ const TripsPage = () => {
                         />
                     </div>
 
-                    <div className="mb-4">
+                    <div className="mb-2">
                         <Label htmlFor="description">Опис (необов'язково)</Label>
                         <Input
                             id="description"
@@ -109,18 +57,36 @@ const TripsPage = () => {
                         />
                     </div>
 
-                    <Button
-                        onClick={handleCreateTrip}
-                        disabled={loading}
-                        className="w-full mt-2"
-                    >
+                    <div className="mb-2">
+                        <Label htmlFor="startDate">Дата початку</Label>
+                        <Input
+                            id="startDate"
+                            type="date"
+                            value={startDate}
+                            onChange={(e) => setStartDate(e.target.value)}
+                            className="mt-1"
+                        />
+                    </div>
+
+                    <div className="mb-2">
+                        <Label htmlFor="endDate">Дата завершення</Label>
+                        <Input
+                            id="endDate"
+                            type="date"
+                            value={endDate}
+                            onChange={(e) => setEndDate(e.target.value)}
+                            className="mt-1"
+                        />
+                    </div>
+
+                    <Button onClick={handleCreateTrip} disabled={loading} className="border mt-2">
                         {loading ? "Створення..." : "Створити подорож"}
                     </Button>
                 </div>
 
                 {/* Список подорожей */}
                 {trips.length === 0 ? (
-                    <p className="text-center text-gray-600">У вас ще немає подорожей</p>
+                    <p>У вас ще немає подорожей</p>
                 ) : (
                     <ul className="space-y-4">
                         {trips.map((trip) => (
@@ -132,8 +98,11 @@ const TripsPage = () => {
                                 <div>
                                     <h2 className="font-semibold">{trip.title}</h2>
                                     {trip.description && <p className="text-gray-600 text-sm">{trip.description}</p>}
+                                    {trip.startDate && trip.endDate && (
+                                        <p className="text-gray-500 text-sm">{trip.startDate} – {trip.endDate}</p>
+                                    )}
                                 </div>
-                                <span className="text-gray-400">&rarr;</span>
+                                <span className="text-gray-400 hover:bg-blue-600 hover:text-white border rounded ">&rarr;</span>
                             </li>
                         ))}
                     </ul>
