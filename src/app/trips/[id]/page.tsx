@@ -16,7 +16,6 @@ const TripDetailPage = () => {
 
     if (!id || Array.isArray(id)) return <p>Невірний ID подорожі</p>;
 
-    // Використовуємо кастомний хук
     const {
         trip,
         places,
@@ -30,19 +29,25 @@ const TripDetailPage = () => {
         handleDeletePlace
     } = useTripDetail(id, user?.uid);
 
-    // Стан для редагування подорожі
+    // --- Стан для редагування подорожі ---
     const [editing, setEditing] = useState(false);
     const [title, setTitle] = useState("");
     const [description, setDescription] = useState("");
     const [startDate, setStartDate] = useState("");
     const [endDate, setEndDate] = useState("");
 
-    // Стан для додавання нового місця
+    // --- Стан для додавання місця ---
     const [newLocation, setNewLocation] = useState("");
     const [newNotes, setNewNotes] = useState("");
     const [newDayNumber, setNewDayNumber] = useState<number>(1);
 
-    // Синхронізуємо локальний стан при завантаженні подорожі
+    // --- Стан для інвайту ---
+    const [inviteEmail, setInviteEmail] = useState("");
+    const [inviteLoading, setInviteLoading] = useState(false);
+    const [inviteError, setInviteError] = useState<string | null>(null);
+    const [inviteSuccess, setInviteSuccess] = useState<string | null>(null);
+
+    // --- Синхронізуємо локальний стан при завантаженні подорожі ---
     if (trip && !title) {
         setTitle(trip.title);
         setDescription(trip.description || "");
@@ -73,12 +78,44 @@ const TripDetailPage = () => {
         setNewDayNumber(1);
     };
 
+    // --- Відправка інвайту ---
+    const handleSendInvite = async () => {
+        if (!inviteEmail.trim()) return;
+        if (inviteEmail === user?.email) {
+            setInviteError("Ви не можете запросити себе");
+            return;
+        }
+
+        setInviteLoading(true);
+        setInviteError(null);
+        setInviteSuccess(null);
+
+        try {
+            const res = await fetch("/api/invites/create", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ tripId: id, email: inviteEmail, currentUserUid: user?.uid })
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) throw new Error(data.error || "Помилка при відправці інвайту");
+
+            setInviteSuccess("Інвайт надіслано успішно!");
+            setInviteEmail("");
+        } catch (err: any) {
+            setInviteError(err.message);
+        } finally {
+            setInviteLoading(false);
+        }
+    };
+
     if (loading) return <p className="p-4">Завантаження...</p>;
     if (!trip) return <p className="p-4">Подорож не знайдена</p>;
 
     return (
         <div className="max-w-3xl mx-auto p-4 space-y-4">
-            {/* Подорож */}
+            {/* --- Подорож --- */}
             <div className="bg-white p-4 rounded-md shadow">
                 {editing ? (
                     <div className="space-y-2">
@@ -110,7 +147,7 @@ const TripDetailPage = () => {
                 )}
             </div>
 
-            {/* Додавання місця */}
+            {/* --- Додавання місця --- */}
             {canEdit && (
                 <div className="bg-white p-4 rounded-md shadow space-y-2">
                     <h3 className="font-semibold">Додати місце</h3>
@@ -124,7 +161,7 @@ const TripDetailPage = () => {
                 </div>
             )}
 
-            {/* Список місць */}
+            {/* --- Список місць --- */}
             <div className="space-y-2">
                 <h3 className="text-xl font-semibold">Місця</h3>
                 {places.length === 0 ? (
@@ -163,6 +200,31 @@ const TripDetailPage = () => {
                     </ul>
                 )}
             </div>
+
+            {/* --- Форма інвайту --- */}
+            {canEdit && (
+                <div className="bg-white p-4 rounded-md shadow space-y-2">
+                    <h3 className="font-semibold">Запросити співпрацівника</h3>
+
+                    <Label>Email</Label>
+                    <Input
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="Введіть email"
+                    />
+
+                    {inviteError && <p className="text-red-600">{inviteError}</p>}
+                    {inviteSuccess && <p className="text-green-600">{inviteSuccess}</p>}
+
+                    <Button
+                        onClick={handleSendInvite}
+                        disabled={inviteLoading}
+                        className="mt-2"
+                    >
+                        {inviteLoading ? "Надсилаю..." : "Надіслати інвайт"}
+                    </Button>
+                </div>
+            )}
         </div>
     );
 };

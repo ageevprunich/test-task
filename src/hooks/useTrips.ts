@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { collection, addDoc, query, where, getDocs, orderBy, Timestamp } from "firebase/firestore";
 import { db } from "@/firebase/firebase";
+import { useAuthStore } from "@/store/authStore";
 
 export type Trip = {
   id: string;
@@ -14,6 +15,8 @@ export const useTrips = (userId?: string) => {
   const [trips, setTrips] = useState<Trip[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const user = useAuthStore((state) => state.user); // отримуємо email та uid користувача
 
   useEffect(() => {
     if (!userId) return;
@@ -44,7 +47,7 @@ export const useTrips = (userId?: string) => {
   }, [userId]);
 
   const createTrip = async (title: string, description?: string, startDate?: string, endDate?: string) => {
-    if (!title.trim() || !userId) return;
+    if (!title.trim() || !userId || !user?.email) return;
 
     // Перевірка дат
     if (startDate && endDate && startDate > endDate) {
@@ -62,6 +65,7 @@ export const useTrips = (userId?: string) => {
         startDate: startDate || null,
         endDate: endDate || null,
         ownerId: userId,
+        ownerEmail: user.email, // тепер user.email гарантовано є
         collaborators: [],
         createdAt: Timestamp.now(),
       });
